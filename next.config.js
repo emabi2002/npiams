@@ -1,7 +1,7 @@
 /** @type {import("next").NextConfig} */
 const nextConfig = {
   output: "export",
-  distDir: "out", 
+  distDir: "out",
   trailingSlash: true,
   images: {
     unoptimized: true
@@ -14,6 +14,9 @@ const nextConfig = {
   },
   experimental: {
     missingSuspenseWithCSRBailout: false
+  },
+  async generateStaticParams() {
+    return [];
   }
 };
 
