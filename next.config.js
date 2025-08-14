@@ -2,7 +2,8 @@
 const nextConfig = {
   output: "export",
   distDir: "out",
-  trailingSlash: true,
+  trailingSlash: false,
+  basePath: "",
   images: {
     unoptimized: true
   },
@@ -14,9 +15,6 @@ const nextConfig = {
   },
   experimental: {
     missingSuspenseWithCSRBailout: false
-  },
-  async generateStaticParams() {
-    return [];
   }
 };
 
