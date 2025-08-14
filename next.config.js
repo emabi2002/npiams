@@ -1,7 +1,7 @@
 /** @type {import("next").NextConfig} */
 const nextConfig = {
   output: "export",
-  distDir: "out",
+  distDir: "out", 
   trailingSlash: true,
   images: {
     unoptimized: true
@@ -11,6 +11,9 @@ const nextConfig = {
   },
   typescript: {
     ignoreBuildErrors: true
+  },
+  experimental: {
+    missingSuspenseWithCSRBailout: false
   }
 };
 
