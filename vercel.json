@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "functions": {
+    "app/**/*.js": {
+      "maxDuration": 30
+    },
+    "pages/api/**/*.js": {
+      "maxDuration": 30
+    }
+  }
+}
