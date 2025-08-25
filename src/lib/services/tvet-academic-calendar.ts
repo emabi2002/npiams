@@ -1,8 +1,10 @@
-import { supabase } from '@/lib/supabase'
+// src/lib/services/tvet-academic-calendar.ts
+// Adjust this import if you use a path alias (e.g. '@/lib/supabase')
+import { supabase } from '../supabase'
 
-// =============================================================================
-// TVET TYPE DEFINITIONS (Database-Driven)
-// =============================================================================
+/* =========================================================
+   Type Interfaces (keep here or import from your own types)
+   ========================================================= */
 
 export interface ProgramType {
   id: string
@@ -27,7 +29,6 @@ export interface TVETAcademicYear {
   description?: string
   created_at: string
   updated_at: string
-  // TVET-specific configuration
   program_type?: ProgramType
   total_lecturing_days?: number
   total_staff_service_days?: number
@@ -87,27 +88,6 @@ export interface TVETSupplementaryPeriod {
   updated_at: string
 }
 
-export interface TVETAcademicEvent {
-  id: string
-  academic_year_id: string
-  term_id?: string
-  event_name: string
-  event_type: 'public_holiday' | 'institution_holiday' | 'exam_period' | 'registration' | 'orientation'
-  event_date: string
-  end_date?: string
-  affects_lecturing_days: boolean
-  affects_staff_service_days: boolean
-  is_institution_wide: boolean
-  department_id?: string
-  program_id?: string
-  priority_level: number
-  color_code: string
-  notes?: string
-  created_by?: string
-  created_at: string
-  updated_at: string
-}
-
 export interface CurrentTVETContext {
   academic_year_id: string
   year_code: string
@@ -151,26 +131,23 @@ export interface CreateTVETTermData {
 }
 
 export interface SystemConfiguration {
-  institution_name: string
-  academic_year_format: string
-  default_program_type: string
-  enable_hostel_management: boolean
-  enable_fee_management: boolean
+  institution_name?: string
+  academic_year_format?: string
+  default_program_type?: string
+  enable_hostel_management?: boolean
+  enable_fee_management?: boolean
   current_academic_year?: string
   current_semester?: string
 }
 
-// =============================================================================
-// DATABASE-DRIVEN TVET ACADEMIC CALENDAR SERVICE
-// =============================================================================
+/* =========================================================
+   Service
+   ========================================================= */
 
 export class TVETAcademicCalendarService {
-
   // ==================== CONFIGURATION MANAGEMENT ====================
 
-  /**
-   * Get all program types from database
-   */
+  /** Get all program types from database */
   static async getProgramTypes(): Promise<ProgramType[]> {
     try {
       const { data, error } = await supabase
@@ -187,28 +164,32 @@ export class TVETAcademicCalendarService {
     }
   }
 
-  /**
-   * Get system configuration from database
-   */
+  /** Get system configuration (from VIEW `system_settings`) */
   static async getSystemConfiguration(): Promise<SystemConfiguration> {
     try {
       const { data, error } = await supabase
-        .from('system_settings')
+        .from('system_settings') // VIEW exposing: setting_key, setting_value (jsonb), setting_type, is_active
         .select('setting_key, setting_value, setting_type')
         .eq('is_active', true)
 
       if (error) throw error
 
-      const config: any = {}
-      data?.forEach(setting => {
-        let value = setting.setting_value
-        if (setting.setting_type === 'boolean') {
-          value = setting.setting_value === 'true'
-        } else if (setting.setting_type === 'number') {
-          value = parseFloat(setting.setting_value)
-        }
-        config[setting.setting_key] = value
-      })
+      const config: Record<string, any> = {}
+      const rows: any[] = Array.isArray(data) ? data : []
+
+      for (const row of rows) {
+        const type = row?.setting_type ? String(row.setting_type) : ''
+        const val = row?.setting_value
+        let parsed: any
+
+        if (type === 'boolean') parsed = typeof val === 'boolean' ? val : String(val).toLowerCase() === 'true'
+        else if (type === 'number') parsed = typeof val === 'number' ? val : Number(val)
+        else if (type === 'string') parsed = typeof val === 'string' ? val : JSON.stringify(val)
+        else if (type === 'null') parsed = null
+        else parsed = val // object / array / unknown → keep as-is
+
+        if (row?.setting_key) config[row.setting_key] = parsed
+      }
 
       return config as SystemConfiguration
     } catch (error: any) {
@@ -217,10 +198,10 @@ export class TVETAcademicCalendarService {
     }
   }
 
-  /**
-   * Get dropdown options from database
-   */
-  static async getDropdownOptions(dropdownType: string): Promise<Array<{key: string, label: string, value: string}>> {
+  /** Get dropdown options from database */
+  static async getDropdownOptions(
+    dropdownType: string
+  ): Promise<Array<{ key: string; label: string; value: string }>> {
     try {
       const { data, error } = await supabase
         .from('dropdown_options')
@@ -231,10 +212,10 @@ export class TVETAcademicCalendarService {
 
       if (error) throw error
 
-      return (data || []).map(item => ({
+      return (data || []).map((item: any) => ({
         key: item.option_key,
         label: item.option_label,
-        value: item.option_value || item.option_key
+        value: item.option_value || item.option_key,
       }))
     } catch (error: any) {
       console.error('Error fetching dropdown options:', error)
@@ -244,9 +225,7 @@ export class TVETAcademicCalendarService {
 
   // ==================== TVET ACADEMIC YEARS ====================
 
-  /**
-   * Get all TVET academic years from database with configuration
-   */
+  /** Get all TVET academic years with nested config */
   static async getAllTVETAcademicYears(): Promise<TVETAcademicYear[]> {
     try {
       const { data, error } = await supabase
@@ -257,27 +236,34 @@ export class TVETAcademicCalendarService {
             total_lecturing_days,
             total_staff_service_days,
             total_terms,
-            terms_per_semester,
-            program_types (*)
+            terms_per_semester
           )
         `)
         .order('year_code', { ascending: false })
 
       if (error) throw error
 
-      // Transform data to TVET format
-      const tvetYears: TVETAcademicYear[] = (data || []).map(year => {
-        const config = year.academic_year_config?.[0]
+      const tvetYears: TVETAcademicYear[] = (data ?? []).map((year: any) => {
+        const cfg = Array.isArray(year.academic_year_config) ? year.academic_year_config[0] : undefined
+
         return {
-          ...year,
-          program_type: config?.program_types,
-          total_lecturing_days: config?.total_lecturing_days,
-          total_staff_service_days: config?.total_staff_service_days,
-          total_terms: config?.total_terms,
-          terms_per_semester: config?.terms_per_semester,
-          is_current: year.is_current || false,
-          is_active: year.is_active || true,
-          description: year.description || ''
+          id: year.id,
+          year_code: year.year_code,
+          year_name: year.year_name,
+          start_date: year.start_date,
+          end_date: year.end_date,
+          is_current: !!year.is_current,
+          is_active: year.is_active ?? true,
+          description: year.description ?? '',
+          created_at: year.created_at,
+          updated_at: year.updated_at,
+
+          // Config values
+          total_lecturing_days: cfg?.total_lecturing_days,
+          total_staff_service_days: cfg?.total_staff_service_days,
+          total_terms: cfg?.total_terms,
+          terms_per_semester: cfg?.terms_per_semester,
+          // program_type intentionally not populated (no deep join)
         }
       })
 
@@ -288,13 +274,11 @@ export class TVETAcademicCalendarService {
     }
   }
 
-  /**
-   * Get current TVET academic year from database
-   */
+  /** Get current TVET academic year */
   static async getCurrentTVETAcademicYear(): Promise<TVETAcademicYear | null> {
     try {
-      // First try to get from system settings
       const config = await this.getSystemConfiguration()
+
       if (config.current_academic_year) {
         const { data, error } = await supabase
           .from('academic_years')
@@ -304,30 +288,37 @@ export class TVETAcademicCalendarService {
               total_lecturing_days,
               total_staff_service_days,
               total_terms,
-              terms_per_semester,
-              program_types (*)
+              terms_per_semester
             )
           `)
           .eq('id', config.current_academic_year)
-          .single()
+          .maybeSingle()
 
         if (!error && data) {
-          const yearConfig = data.academic_year_config?.[0]
+          const cfg = Array.isArray(data.academic_year_config) ? data.academic_year_config[0] : undefined
+
           return {
-            ...data,
-            program_type: yearConfig?.program_types,
-            total_lecturing_days: yearConfig?.total_lecturing_days,
-            total_staff_service_days: yearConfig?.total_staff_service_days,
-            total_terms: yearConfig?.total_terms,
-            terms_per_semester: yearConfig?.terms_per_semester,
+            id: data.id,
+            year_code: data.year_code,
+            year_name: data.year_name,
+            start_date: data.start_date,
+            end_date: data.end_date,
             is_current: true,
-            is_active: data.is_active || true,
-            description: data.description || ''
+            is_active: data.is_active ?? true,
+            description: data.description ?? '',
+            created_at: data.created_at,
+            updated_at: data.updated_at,
+
+            // Config values
+            total_lecturing_days: cfg?.total_lecturing_days,
+            total_staff_service_days: cfg?.total_staff_service_days,
+            total_terms: cfg?.total_terms,
+            terms_per_semester: cfg?.terms_per_semester,
+            // program_type intentionally not populated
           }
         }
       }
 
-      // Fallback to most recent year
       const years = await this.getAllTVETAcademicYears()
       return years.length > 0 ? { ...years[0], is_current: true } : null
     } catch (error: any) {
@@ -336,34 +327,25 @@ export class TVETAcademicCalendarService {
     }
   }
 
-  /**
-   * Create new TVET academic year with database-driven configuration
-   */
+  /** Create new TVET academic year with config */
   static async createTVETAcademicYear(yearData: CreateTVETYearData): Promise<TVETAcademicYear> {
     try {
-      // Check if year code already exists
       const { data: existing } = await supabase
         .from('academic_years')
         .select('year_code')
         .eq('year_code', yearData.year_code)
-        .single()
+        .maybeSingle()
 
-      if (existing) {
-        throw new Error(`TVET academic year ${yearData.year_code} already exists`)
-      }
+      if (existing) throw new Error(`TVET academic year ${yearData.year_code} already exists`)
 
-      // Get program type configuration
       const { data: programType, error: programError } = await supabase
         .from('program_types')
         .select('*')
         .eq('id', yearData.program_type_id)
         .single()
 
-      if (programError || !programType) {
-        throw new Error('Invalid program type selected')
-      }
+      if (programError || !programType) throw new Error('Invalid program type selected')
 
-      // Create academic year
       const { data: academicYear, error: yearError } = await supabase
         .from('academic_years')
         .insert([{
@@ -371,14 +353,13 @@ export class TVETAcademicCalendarService {
           year_name: yearData.year_name,
           start_date: yearData.start_date,
           end_date: yearData.end_date,
-          description: yearData.description
+          description: yearData.description,
         }])
         .select()
         .single()
 
       if (yearError) throw yearError
 
-      // Create academic year configuration
       const { error: configError } = await supabase
         .from('academic_year_config')
         .insert([{
@@ -387,12 +368,11 @@ export class TVETAcademicCalendarService {
           total_lecturing_days: programType.default_lecturing_days,
           total_staff_service_days: programType.default_staff_service_days,
           total_terms: 4,
-          terms_per_semester: 2
+          terms_per_semester: 2,
         }])
 
       if (configError) throw configError
 
-      // Return TVET formatted academic year
       return {
         ...academicYear,
         program_type: programType,
@@ -400,7 +380,7 @@ export class TVETAcademicCalendarService {
         total_staff_service_days: programType.default_staff_service_days,
         total_terms: 4,
         terms_per_semester: 2,
-        is_active: true
+        is_active: true,
       }
     } catch (error: any) {
       console.error('Error creating TVET academic year:', error)
@@ -408,17 +388,13 @@ export class TVETAcademicCalendarService {
     }
   }
 
-  /**
-   * Set current TVET academic year in database configuration
-   */
+  /** Set current TVET academic year */
   static async setCurrentTVETAcademicYear(yearId: string): Promise<void> {
     try {
-      // Update system setting
       const { error } = await supabase.rpc('set_system_setting', {
         p_setting_key: 'current_academic_year',
-        p_setting_value: yearId
+        p_setting_value: yearId,
       })
-
       if (error) throw error
     } catch (error: any) {
       console.error('Error setting current TVET academic year:', error)
@@ -428,9 +404,7 @@ export class TVETAcademicCalendarService {
 
   // ==================== TVET TERMS ====================
 
-  /**
-   * Get terms for TVET academic year with database configuration
-   */
+  /** Get terms for an academic year */
   static async getTVETTermsByYear(academicYearId: string): Promise<TVETTerm[]> {
     try {
       const { data, error } = await supabase
@@ -445,8 +419,7 @@ export class TVETAcademicCalendarService {
 
       if (error) throw error
 
-      // Transform to TVET terms format using database configuration
-      const tvetTerms: TVETTerm[] = (data || []).map(semester => {
+      const tvetTerms: TVETTerm[] = (data || []).map((semester: any) => {
         const termConfig = semester.term_config?.[0]
         return {
           id: semester.id,
@@ -466,7 +439,7 @@ export class TVETAcademicCalendarService {
           description: semester.description || '',
           created_at: semester.created_at,
           updated_at: semester.updated_at,
-          academic_year: semester.academic_years
+          academic_year: semester.academic_years,
         }
       })
 
@@ -477,18 +450,12 @@ export class TVETAcademicCalendarService {
     }
   }
 
-  /**
-   * Set current TVET term
-   */
+  /** Set current TVET term */
   static async setCurrentTVETTerm(termId: string): Promise<void> {
     try {
-      // Clear all current term flags
-      await supabase
-        .from('academic_semesters')
-        .update({ is_current: false })
-        .neq('id', 'dummy') // Update all rows
+      // Clear current flags except the one we're about to set
+      await supabase.from('academic_semesters').update({ is_current: false }).neq('id', termId)
 
-      // Set the specified term as current
       const { error } = await supabase
         .from('academic_semesters')
         .update({ is_current: true })
@@ -496,10 +463,9 @@ export class TVETAcademicCalendarService {
 
       if (error) throw error
 
-      // Also update system setting
       await supabase.rpc('set_system_setting', {
         p_setting_key: 'current_semester',
-        p_setting_value: termId
+        p_setting_value: termId,
       })
     } catch (error: any) {
       console.error('Error setting current TVET term:', error)
@@ -507,9 +473,7 @@ export class TVETAcademicCalendarService {
     }
   }
 
-  /**
-   * Get weeks for TVET term
-   */
+  /** Get weeks for a term */
   static async getTVETWeeksByTerm(termId: string): Promise<TVETTermWeek[]> {
     try {
       const { data, error } = await supabase
@@ -526,9 +490,7 @@ export class TVETAcademicCalendarService {
     }
   }
 
-  /**
-   * Get supplementary periods for TVET academic year
-   */
+  /** Get supplementary periods for an academic year */
   static async getTVETSupplementaryPeriods(academicYearId: string): Promise<TVETSupplementaryPeriod[]> {
     try {
       const { data, error } = await supabase
@@ -545,12 +507,9 @@ export class TVETAcademicCalendarService {
     }
   }
 
-  /**
-   * Create new TVET term with database configuration
-   */
+  /** Create a term */
   static async createTVETTerm(termData: CreateTVETTermData): Promise<TVETTerm> {
     try {
-      // Create academic semester
       const { data: semester, error: semesterError } = await supabase
         .from('academic_semesters')
         .insert([{
@@ -560,17 +519,19 @@ export class TVETAcademicCalendarService {
           semester_number: termData.term_number,
           start_date: termData.lecturing_starts,
           end_date: termData.college_closes,
-          total_weeks: Math.ceil((new Date(termData.college_closes).getTime() - new Date(termData.lecturing_starts).getTime()) / (1000 * 60 * 60 * 24 * 7)),
+          total_weeks: Math.ceil(
+            (new Date(termData.college_closes).getTime() - new Date(termData.lecturing_starts).getTime()) /
+            (1000 * 60 * 60 * 24 * 7)
+          ),
           description: termData.description,
           is_current: false,
-          is_active: true
+          is_active: true,
         }])
         .select()
         .single()
 
       if (semesterError) throw semesterError
 
-      // Create term configuration
       const { error: configError } = await supabase
         .from('term_config')
         .insert([{
@@ -582,12 +543,11 @@ export class TVETAcademicCalendarService {
           lectures_end_exam_start: termData.lectures_end_exam_start,
           college_closes: termData.college_closes,
           lecturing_staff_days: termData.lecturing_staff_days,
-          total_staff_service_days: termData.total_staff_service_days
+          total_staff_service_days: termData.total_staff_service_days,
         }])
 
       if (configError) throw configError
 
-      // Return TVET formatted term
       return {
         id: semester.id,
         academic_year_id: semester.academic_year_id,
@@ -605,7 +565,7 @@ export class TVETAcademicCalendarService {
         is_active: true,
         description: termData.description || '',
         created_at: semester.created_at,
-        updated_at: semester.updated_at
+        updated_at: semester.updated_at,
       }
     } catch (error: any) {
       console.error('Error creating TVET term:', error)
@@ -615,17 +575,14 @@ export class TVETAcademicCalendarService {
 
   // ==================== CALENDAR OVERVIEW ====================
 
-  /**
-   * Get TVET academic calendar overview from database
-   */
+  /** Flattened “overview” for UI tables */
   static async getTVETCalendarOverview(): Promise<any[]> {
     try {
       const years = await this.getAllTVETAcademicYears()
-      const overview = []
+      const overview: any[] = []
 
       for (const year of years) {
         const terms = await this.getTVETTermsByYear(year.id)
-
         for (const term of terms) {
           overview.push({
             year_code: year.year_code,
@@ -640,7 +597,7 @@ export class TVETAcademicCalendarService {
             college_closes: term.college_closes,
             lecturing_staff_days: term.lecturing_staff_days,
             total_staff_service_days: term.total_staff_service_days,
-            weeks_configured: 0 // Could be calculated from weeks table if implemented
+            weeks_configured: 0,
           })
         }
       }
@@ -654,29 +611,24 @@ export class TVETAcademicCalendarService {
 
   // ==================== CURRENT CONTEXT ====================
 
-  /**
-   * Get current TVET academic context from database
-   */
+  /** Current context (year + current/first term) */
   static async getCurrentTVETContext(): Promise<CurrentTVETContext | null> {
     try {
       const [year, config] = await Promise.all([
         this.getCurrentTVETAcademicYear(),
-        this.getSystemConfiguration()
+        this.getSystemConfiguration(),
       ])
 
       if (!year) return null
 
-      // Get current semester if configured
-      let currentTerm = null
-      if (config.current_semester) {
+      let currentTerm: any = null
+
+      if ((config as any).current_semester) {
         const { data } = await supabase
           .from('academic_semesters')
-          .select(`
-            *,
-            term_config (*)
-          `)
-          .eq('id', config.current_semester)
-          .single()
+          .select(`*, term_config (*)`)
+          .eq('id', (config as any).current_semester)
+          .maybeSingle()
 
         if (data) {
           const termConfig = data.term_config?.[0]
@@ -691,13 +643,12 @@ export class TVETAcademicCalendarService {
             lectures_end_exam_start: termConfig?.lectures_end_exam_start || data.end_date,
             college_closes: termConfig?.college_closes || data.end_date,
             lecturing_staff_days: termConfig?.lecturing_staff_days || 0,
-            total_staff_service_days: termConfig?.total_staff_service_days || 0
+            total_staff_service_days: termConfig?.total_staff_service_days || 0,
           }
         }
       }
 
       if (!currentTerm) {
-        // Get first term of current year as fallback
         const terms = await this.getTVETTermsByYear(year.id)
         currentTerm = terms.length > 0 ? terms[0] : null
       }
@@ -719,7 +670,7 @@ export class TVETAcademicCalendarService {
         lectures_end_exam_start: currentTerm.lectures_end_exam_start,
         college_closes: currentTerm.college_closes,
         lecturing_staff_days: currentTerm.lecturing_staff_days,
-        total_staff_service_days: currentTerm.total_staff_service_days
+        total_staff_service_days: currentTerm.total_staff_service_days,
       }
     } catch (error: any) {
       console.error('Error fetching current TVET context:', error)
@@ -727,25 +678,22 @@ export class TVETAcademicCalendarService {
     }
   }
 
-  // ==================== UTILITY METHODS ====================
+  // ==================== UTILITY ====================
 
-  /**
-   * Generate weeks for TVET term
-   */
+  /** Calculate number of weeks for a term */
   static async generateTVETTermWeeks(termId: string): Promise<number> {
     try {
       const { data: semester } = await supabase
         .from('academic_semesters')
         .select('start_date, end_date')
         .eq('id', termId)
-        .single()
+        .maybeSingle()
 
       if (!semester) return 0
 
       const startDate = new Date(semester.start_date)
       const endDate = new Date(semester.end_date)
       const weeks = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 7))
-
       return weeks
     } catch (error: any) {
       console.error('Error generating TVET term weeks:', error)

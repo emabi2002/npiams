@@ -6,24 +6,14 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Building2, Search, Plus, Edit, Users, BookOpen, UserCheck, Crown } from 'lucide-react'
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle
+} from '@/components/ui/dialog'
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow
+} from '@/components/ui/table'
+import { Building2, Search, Users, BookOpen, UserCheck, Crown, Shield } from 'lucide-react'
 
 type DeptRow = {
   id: string
@@ -34,10 +24,8 @@ type DeptRow = {
   courses_count: number
   staff_count: number
   students_count: number
-  // optional – only rendered if you later add this column
   description?: string | null
-  // optional – used to auto-filter staff for academic depts
-  category?: 'academic' | 'administration' | 'service'
+  category: 'academic' | 'administration' | 'service'   // <-- added
 }
 
 type StaffOption = {
@@ -45,7 +33,7 @@ type StaffOption = {
   first_name: string
   last_name: string
   email: string
-  staff_type: 'academic' | 'non_academic'
+  staff_type: 'academic'|'non_academic'
   department_name: string | null
   department_code: string | null
 }
@@ -57,17 +45,8 @@ export default function DepartmentsPage() {
   const [rows, setRows] = useState<DeptRow[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // create form state (all real DB writes)
-  const [name, setName] = useState('')
-  const [code, setCode] = useState('')
-  const [headFirst, setHeadFirst] = useState('')
-  const [headLast, setHeadLast] = useState('')
-  const [headEmail, setHeadEmail] = useState('')
-
-  // ===== Assign Head dialog state =====
+  // Assign Head dialog
   const [assignOpen, setAssignOpen] = useState(false)
   const [assignDept, setAssignDept] = useState<DeptRow | null>(null)
   const [staffQ, setStaffQ] = useState('')
@@ -75,11 +54,8 @@ export default function DepartmentsPage() {
   const [staffOptions, setStaffOptions] = useState<StaffOption[]>([])
   const [selectedStaffId, setSelectedStaffId] = useState<string>('')
   const [startDate, setStartDate] = useState<string>('')
-  const [alsoCoordinator, setAlsoCoordinator] = useState<boolean>(false) // ✅ checkbox state
 
-  useEffect(() => {
-    refresh()
-  }, [])
+  useEffect(() => { refresh() }, [])
 
   const refresh = async () => {
     setLoading(true)
@@ -96,44 +72,6 @@ export default function DepartmentsPage() {
     }
   }
 
-  const onCreate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name.trim() || !code.trim()) {
-      alert('Name and Code are required.')
-      return
-    }
-    setIsSubmitting(true)
-    try {
-      const r = await fetch('/api/departments/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          code: code.trim().toUpperCase(),
-          head_email: headEmail.trim() || undefined,
-          head_first_name: headFirst.trim() || undefined,
-          head_last_name: headLast.trim() || undefined,
-        }),
-      })
-      const j = await r.json()
-      if (!j.success) throw new Error(j.error || 'Create failed')
-
-      // reset + close + refresh
-      setName('')
-      setCode('')
-      setHeadFirst('')
-      setHeadLast('')
-      setHeadEmail('')
-      setIsCreateOpen(false)
-      await refresh()
-    } catch (e: any) {
-      console.error(e)
-      alert(`Failed to create department: ${e.message}`)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
   const filtered = useMemo(() => {
     const q = search.toLowerCase()
     if (!q) return rows
@@ -145,37 +83,14 @@ export default function DepartmentsPage() {
     )
   }, [rows, search])
 
-  const totalCourses = useMemo(() => filtered.reduce((s, r) => s + (r.courses_count || 0), 0), [filtered])
-  const totalStaff   = useMemo(() => filtered.reduce((s, r) => s + (r.staff_count || 0), 0), [filtered])
-  const withHeads    = useMemo(() => filtered.filter(r => !!r.head_name).length, [filtered])
-
-  // ===== Assign Head logic =====
-  const onOpenAssign = (dept: DeptRow) => {
-    setAssignDept(dept)
-    setAssignOpen(true)
-  }
-
-  useEffect(() => {
-    if (!assignOpen) return
-    // default start date = today; reset selection & checkbox
-    const today = new Date()
-    const y = today.getFullYear()
-    const m = String(today.getMonth() + 1).padStart(2, '0')
-    const d = String(today.getDate()).padStart(2, '0')
-    setStartDate(`${y}-${m}-${d}`)
-    setSelectedStaffId('')
-    setStaffQ('')
-    setStaffOptions([])
-    setAlsoCoordinator(false) // ✅ reset checkbox
-  }, [assignOpen])
-
   const searchStaff = async (q: string) => {
     setStaffLoading(true)
     try {
       const usp = new URLSearchParams()
       if (q && q.trim()) usp.set('q', q.trim())
-      // If the department is academic, only fetch academic staff
+      // ⬇️ If the department is academic, only fetch academic staff
       if (assignDept?.category === 'academic') usp.set('type', 'academic')
+
       const r = await fetch(`/api/staff?${usp.toString()}`, { cache: 'no-store' })
       const j = await r.json()
       if (!j.success) throw new Error(j.error || 'Failed to search staff')
@@ -197,6 +112,24 @@ export default function DepartmentsPage() {
     }
   }
 
+  useEffect(() => {
+    if (assignOpen) {
+      const today = new Date()
+      const y = today.getFullYear()
+      const m = String(today.getMonth() + 1).padStart(2, '0')
+      const d = String(today.getDate()).padStart(2, '0')
+      setStartDate(`${y}-${m}-${d}`)
+      setSelectedStaffId('')
+      setStaffQ('')
+      setStaffOptions([])
+    }
+  }, [assignOpen])
+
+  const onOpenAssign = (dept: DeptRow) => {
+    setAssignDept(dept)
+    setAssignOpen(true)
+  }
+
   const onAssignHead = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!assignDept || !selectedStaffId) {
@@ -210,8 +143,7 @@ export default function DepartmentsPage() {
         body: JSON.stringify({
           department_id: assignDept.id,
           staff_id: selectedStaffId,
-          start_date: startDate || undefined,
-          make_coordinator: alsoCoordinator, // ✅ pass the checkbox flag
+          start_date: startDate || undefined
         })
       })
       const j = await res.json()
@@ -238,6 +170,10 @@ export default function DepartmentsPage() {
     )
   }
 
+  const totalCourses = filtered.reduce((s, r) => s + (r.courses_count || 0), 0)
+  const totalStaff   = filtered.reduce((s, r) => s + (r.staff_count || 0), 0)
+  const withHeads    = filtered.filter(r => !!r.head_name).length
+
   return (
     <div className="container mx-auto px-4 py-8 space-y-6">
       {/* Header */}
@@ -247,65 +183,11 @@ export default function DepartmentsPage() {
             <Building2 className="h-8 w-8 text-primary" />
             Departments
           </h1>
-          <p className="text-gray-600 mt-2">Manage academic departments and their leadership</p>
+          <p className="text-gray-600 mt-2">Manage academic & administrative departments</p>
         </div>
-
-        {canManageDepartments && (
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Department
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Create New Department</DialogTitle>
-                <DialogDescription>Add a new academic department</DialogDescription>
-              </DialogHeader>
-
-              <form onSubmit={onCreate} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="name">Department Name *</Label>
-                    <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g., Computer Science" required />
-                  </div>
-                  <div>
-                    <Label htmlFor="code">Department Code *</Label>
-                    <Input id="code" value={code} onChange={e => setCode(e.target.value.toUpperCase())} placeholder="e.g., CS" required />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="headFirst">Head First Name</Label>
-                    <Input id="headFirst" value={headFirst} onChange={e => setHeadFirst(e.target.value)} placeholder="Optional" />
-                  </div>
-                  <div>
-                    <Label htmlFor="headLast">Head Last Name</Label>
-                    <Input id="headLast" value={headLast} onChange={e => setHeadLast(e.target.value)} placeholder="Optional" />
-                  </div>
-                  <div>
-                    <Label htmlFor="headEmail">Head Email</Label>
-                    <Input id="headEmail" type="email" value={headEmail} onChange={e => setHeadEmail(e.target.value)} placeholder="Optional" />
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-2 pt-4">
-                  <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)} disabled={isSubmitting}>
-                    Cancel
-                  </Button>
-                  <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting ? 'Creating…' : 'Create Department'}
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-        )}
       </div>
 
-      {/* Stats Cards (based on current filtered results) */}
+      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -317,7 +199,6 @@ export default function DepartmentsPage() {
             <p className="text-xs text-muted-foreground">Active departments</p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Courses</CardTitle>
@@ -328,7 +209,6 @@ export default function DepartmentsPage() {
             <p className="text-xs text-muted-foreground">Across all departments</p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Staff</CardTitle>
@@ -336,10 +216,9 @@ export default function DepartmentsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{totalStaff}</div>
-            <p className="text-xs text-muted-foreground">Academic staff</p>
+            <p className="text-xs text-muted-foreground">Primary attachments</p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">With Heads</CardTitle>
@@ -347,7 +226,7 @@ export default function DepartmentsPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{withHeads}</div>
-            <p className="text-xs text-muted-foreground">Have department heads</p>
+            <p className="text-xs text-muted-foreground">Have current head</p>
           </CardContent>
         </Card>
       </div>
@@ -356,17 +235,12 @@ export default function DepartmentsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Search Departments</CardTitle>
-          <CardDescription>Find departments by name, code, or department head</CardDescription>
+          <CardDescription>Find by name, code, or current head</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="relative">
             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search departments…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10"
-            />
+            <Input className="pl-10" placeholder="Search departments…" value={search} onChange={(e)=>setSearch(e.target.value)} />
           </div>
         </CardContent>
       </Card>
@@ -375,6 +249,7 @@ export default function DepartmentsPage() {
       <Card>
         <CardHeader>
           <CardTitle>All Departments ({filtered.length})</CardTitle>
+          <CardDescription>Live from v_department_summary</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="rounded-md border overflow-x-auto">
@@ -384,6 +259,7 @@ export default function DepartmentsPage() {
                   <TableHead>Department</TableHead>
                   <TableHead>Code</TableHead>
                   <TableHead>Head</TableHead>
+                  <TableHead>Category</TableHead>
                   <TableHead>Courses</TableHead>
                   <TableHead>Staff</TableHead>
                   <TableHead>Students</TableHead>
@@ -393,75 +269,66 @@ export default function DepartmentsPage() {
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={canManageDepartments ? 7 : 6} className="text-center py-8 text-muted-foreground">
-                      {search ? 'No departments match your search.' : 'No departments yet.'}
+                    <TableCell colSpan={canManageDepartments ? 8 : 7} className="text-center py-8 text-muted-foreground">
+                      No departments found.
                     </TableCell>
                   </TableRow>
-                ) : (
-                  filtered.map((d) => (
-                    <TableRow key={d.id}>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{d.name}</div>
-                          {d.description ? (
-                            <div className="text-sm text-muted-foreground">{d.description}</div>
-                          ) : null}
-                        </div>
+                ) : filtered.map((d) => (
+                  <TableRow key={d.id}>
+                    <TableCell>
+                      <div className="font-medium">{d.name}</div>
+                      {d.description ? <div className="text-sm text-muted-foreground">{d.description}</div> : null}
+                    </TableCell>
+                    <TableCell><Badge variant="outline">{d.code ?? '—'}</Badge></TableCell>
+                    <TableCell>
+                      {d.head_name ? (
+                        <>
+                          <div className="font-medium">{d.head_name}</div>
+                          {d.head_email && <div className="text-xs text-muted-foreground">{d.head_email}</div>}
+                        </>
+                      ) : <span className="text-muted-foreground">No head assigned</span>}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Shield className="h-4 w-4 text-muted-foreground" />
+                        <span className="capitalize">{d.category}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>{d.courses_count}</TableCell>
+                    <TableCell>{d.staff_count}</TableCell>
+                    <TableCell>{d.students_count}</TableCell>
+                    {canManageDepartments && (
+                      <TableCell className="text-right">
+                        <Button variant="outline" size="sm" onClick={() => onOpenAssign(d)}>
+                          <Crown className="h-4 w-4 mr-2" />
+                          Assign Head
+                        </Button>
                       </TableCell>
-                      <TableCell><Badge variant="outline">{d.code ?? '—'}</Badge></TableCell>
-                      <TableCell>
-                        {d.head_name ? (
-                          <div>
-                            <div className="font-medium">{d.head_name}</div>
-                            {d.head_email && (
-                              <div className="text-sm text-muted-foreground">{d.head_email}</div>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">No head assigned</span>
-                        )}
-                      </TableCell>
-                      <TableCell>{d.courses_count}</TableCell>
-                      <TableCell>{d.staff_count}</TableCell>
-                      <TableCell>{d.students_count}</TableCell>
-                      {canManageDepartments && (
-                        <TableCell className="text-right">
-                          <div className="inline-flex gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => onOpenAssign(d)}
-                              title="Assign Head of Department"
-                            >
-                              <Crown className="h-4 w-4 mr-2" />
-                              Assign Head
-                            </Button>
-
-                            {/* Edit wiring coming next—button disabled to avoid dead action */}
-                            <Button variant="outline" size="sm" disabled title="Edit coming soon">
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      )}
-                    </TableRow>
-                  ))
-                )}
+                    )}
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </div>
         </CardContent>
       </Card>
 
-      {/* ===== Assign Head Dialog ===== */}
+      {/* Assign Head Dialog */}
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Assign Department Head</DialogTitle>
             <DialogDescription>
-              {assignDept
-                ? <>Set the head for <strong>{assignDept.name}</strong>{assignDept.category === 'academic' ? ' (academic department)' : ''}.</>
-                : 'Select a department head'}
+              {assignDept ? (
+                <>
+                  Set the head for <strong>{assignDept.name}</strong>.&nbsp;
+                  {assignDept.category === 'academic' && (
+                    <span className="text-orange-600 font-medium">
+                      Academic department: only academic staff are eligible.
+                    </span>
+                  )}
+                </>
+              ) : 'Select a department head'}
             </DialogDescription>
           </DialogHeader>
 
@@ -476,41 +343,22 @@ export default function DepartmentsPage() {
                     className="pl-9"
                     placeholder={assignDept?.category === 'academic' ? 'Search academic staff…' : 'Search staff…'}
                     value={staffQ}
-                    onChange={(e) => setStaffQ(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); searchStaff(staffQ) } }}
+                    onChange={(e)=>setStaffQ(e.target.value)}
+                    onKeyDown={(e)=>{ if (e.key==='Enter'){ e.preventDefault(); searchStaff(staffQ); } }}
                   />
                 </div>
                 <div className="mt-2">
-                  <Button type="button" variant="outline" size="sm" onClick={() => searchStaff(staffQ)} disabled={staffLoading}>
+                  <Button type="button" variant="outline" size="sm" onClick={()=>searchStaff(staffQ)} disabled={staffLoading}>
                     {staffLoading ? 'Searching…' : 'Search'}
                   </Button>
                 </div>
               </div>
-
               <div>
                 <Label htmlFor="start">Start Date</Label>
-                <Input id="start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-                <div className="mt-3 flex items-center gap-2">
-                  <input
-                    id="alsoCoord"
-                    type="checkbox"
-                    className="h-4 w-4"
-                    checked={alsoCoordinator}
-                    onChange={(e) => setAlsoCoordinator(e.target.checked)}
-                  />
-                  <label htmlFor="alsoCoord" className="text-sm">
-                    Also make this head the <strong>Program Coordinator</strong> for all programs in this department
-                  </label>
-                </div>
-                {assignDept?.category === 'academic' && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Academic departments: coordinators must be <em>academic staff</em> (enforced by DB).
-                  </p>
-                )}
+                <Input id="start" type="date" value={startDate} onChange={(e)=>setStartDate(e.target.value)} />
               </div>
             </div>
 
-            {/* Results */}
             <div className="max-h-64 overflow-auto rounded border">
               {staffOptions.length === 0 ? (
                 <div className="p-4 text-sm text-muted-foreground">No results yet. Search to find staff.</div>
@@ -534,7 +382,7 @@ export default function DepartmentsPage() {
                             name="selectedStaff"
                             value={s.staff_id}
                             checked={selectedStaffId === s.staff_id}
-                            onChange={() => setSelectedStaffId(s.staff_id)}
+                            onChange={()=>setSelectedStaffId(s.staff_id)}
                           />
                         </TableCell>
                         <TableCell className="font-medium">{s.first_name} {s.last_name}</TableCell>
@@ -553,7 +401,7 @@ export default function DepartmentsPage() {
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setAssignOpen(false)}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={()=>setAssignOpen(false)}>Cancel</Button>
               <Button type="submit" disabled={!selectedStaffId}>Assign Head</Button>
             </div>
           </form>

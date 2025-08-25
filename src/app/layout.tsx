@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Script from "next/script";
 import Image from "next/image";
-import { AuthProvider } from "@/contexts/AuthContext"; // ✅ AuthProvider
+import { AuthProvider } from "@/contexts/AuthContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -23,19 +22,15 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
-  // ✅ Helper function to handle external vs internal links
+}: Readonly<{ children: React.ReactNode }>) {
+  // Helper to handle external vs internal links
   const renderLink = (href: string, label: string) => {
     const isExternal = href.startsWith("http");
     return (
       <a
         href={href}
         className="block pl-4 hover:text-yellow-300"
-        {...(isExternal
-          ? { target: "_blank", rel: "noopener noreferrer" }
-          : {})}
+        {...(isExternal ? { target: "_blank", rel: "noopener noreferrer" } : {})}
       >
         {label}
       </a>
@@ -44,12 +39,8 @@ export default function RootLayout({
 
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <head>
-        <Script
-          crossOrigin="anonymous"
-          src="//unpkg.com/same-runtime/dist/index.global.js"
-        />
-      </head>
+      {/* Removed global Script that caused runtime SyntaxError */}
+      <head />
       <body suppressHydrationWarning className="antialiased">
         <AuthProvider>
           <div className="flex flex-col h-screen overflow-hidden">
@@ -63,7 +54,7 @@ export default function RootLayout({
                   height={40}
                 />
                 <span className="text-xl font-bold text-white">
-                  ((NPIAMS) National Polytechnic Institute Academic Management System
+                  (NPIAMS) National Polytechnic Institute Academic Management System
                 </span>
               </div>
               <div className="relative">
@@ -92,21 +83,33 @@ export default function RootLayout({
               {/* Sidebar */}
               <aside className="w-64 bg-gradient-to-b from-black via-blue-700 to-red-600 text-white p-4 shadow-md overflow-y-auto">
                 <nav className="space-y-2 text-sm">
-                  <div className="font-bold">Academic Setup</div>
+                  {/* === AMS HEADER (bright blue) === */}
+                  <div className="px-2 mt-1">
+                    <span
+                      className="inline-flex items-center gap-2 rounded-md
+                                 bg-gradient-to-r from-sky-400 to-blue-600
+                                 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white
+                                 shadow-md ring-1 ring-white/20"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-white/90" />
+                      Academic Management System
+                    </span>
+                    <div
+                      className="mt-2 h-[3px] w-full rounded-full
+                                 bg-gradient-to-r from-sky-400/80 via-blue-400/80 to-sky-400/80"
+                    />
+                  </div>
+
+                  {/* --- Existing AMS groups --- */}
+                  <div className="font-bold mt-4">Academic Setup</div>
                   {renderLink("/academic-calendar", "Academic Years")}
                   {renderLink("/departments", "Departments")}
                   {renderLink("/programs", "Programs")}
                   {renderLink("/courses", "Courses")}
 
                   <div className="font-bold mt-4">Student Management</div>
-                  {renderLink(
-                    "https://same-wgoiz1sb4xo-latest.netlify.app/",
-                    "New Applications"
-                  )}
-                  
                   {renderLink("/student-profiles", "Student Profiles")}
-                  {renderLink("/users/enhanced", "User Management")} 
-                               
+                  {renderLink("/users/enhanced", "User Management")}
 
                   <div className="font-bold mt-4">Fee Management</div>
                   {renderLink("/fee-management", "Fee Management")}
@@ -116,13 +119,38 @@ export default function RootLayout({
                   {renderLink("/student-grades", "Grade Management")}
 
                   <div className="font-bold mt-4">Instructor Management</div>
-                  {renderLink(
-                    "/instructor-management",
-                    "Instructor Management"
-                  )}
+                  {renderLink("/instructor-management", "Instructor Management")}
 
                   <div className="font-bold mt-4">Reports & Analytics</div>
                   {renderLink("/analytics-dashboard", "Analytics Dashboard")}
+
+                  {/* Divider */}
+                  <div
+                    className="my-5 mx-1 h-[3px] w-[95%] rounded-full
+                               bg-gradient-to-r from-transparent via-white/70 to-transparent"
+                  />
+
+                  {/* === SRS HEADER (magenta→red) === */}
+                  <div className="px-2">
+                    <span
+                      className="inline-flex items-center gap-2 rounded-md
+                                 bg-gradient-to-r from-fuchsia-500 via-rose-500 to-red-500
+                                 px-3 py-1 text-[11px] font-extrabold uppercase tracking-wider text-white
+                                 shadow-md ring-1 ring-white/20"
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-white/90" />
+                      Students Registration System
+                    </span>
+                    <div
+                      className="mt-2 h-[3px] w-full rounded-full
+                                 bg-gradient-to-r from-fuchsia-400/80 via-rose-400/80 to-red-400/80"
+                    />
+                  </div>
+
+                  {/* SRS links */}
+                  {renderLink("/admissions/apply", "New Applications")}
+                  {renderLink("/admissions/admin", "Review Applications")}
+                  {renderLink("/admissions/status", "Enrollment Tracking")}
                 </nav>
               </aside>
 
